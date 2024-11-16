@@ -1,0 +1,79 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.postgresql:postgresql:42.7.4"
+        classpath "org.testcontainers:postgresql:1.20.2"
+        classpath "org.flywaydb:flyway-database-postgresql:10.18.0"
+    }
+    ext {
+        jooqVersion = '3.19.13'
+    }
+}
+
+import org.testcontainers.containers.PostgreSQLContainer
+import org.flywaydb.core.Flyway
+
+tasks.register("tc-start") {
+    doLast {
+        def db = new PostgreSQLContainer("postgres:16.4")
+                .withUsername("postgres")
+                .withDatabaseName("postgres")
+                .withPassword("password")
+        db.start()
+
+        // See https://www.jooq.org/doc/latest/manual/code-generation/codegen-system-properties/
+        System.setProperty("jooq.codegen.jdbc.url", db.getJdbcUrl())
+        System.setProperty("jooq.codegen.jdbc.username", db.getUsername())
+        System.setProperty("jooq.codegen.jdbc.password", db.getPassword())
+        System.setProperty("testcontainer.imageName", db.getDockerImageName())
+        System.setProperty("testcontainer.containerid", db.getContainerId())
+
+        Class.forName("org.postgresql.Driver")
+
+        def flyway = Flyway.configure()
+                .dataSource(db.getJdbcUrl(), db.getUsername(), db.getPassword()) // Adjust your DB connection details
+                .locations("filesystem:src/main/resources/db.migration") // Adjust the location of your migration scripts
+                .load()
+        flyway.migrate()
+    }
+}
+
+tasks.register("tc-stop") {
+    doLast {
+        var containerId = System.getProperty("testcontainer.containerid")
+        var imageName = System.getProperty("testcontainer.imageName")
+
+        println("Stopping testcontainer $containerId - $imageName")
+        org.testcontainers.utility.ResourceReaper
+                .instance()
+                .stopAndRemoveContainer(containerId, imageName);
+    }
+}
+
+jooq {
+    configuration {
+        generator {
+            name = "org.jooq.codegen.JavaGenerator"
+            database {
+                name = "org.jooq.meta.postgres.PostgresDatabase"
+                includes = "books"
+            }
+            generate {}
+            target {
+                directory = "src/main/java/com/espectro93/jooqdemo/shared/db"
+                packageName = "generated"
+            }
+        }
+    }
+}
+
+tasks.named("jooqCodegen") {
+    dependsOn("tc-start")
+    finalizedBy("tc-stop")
+}
+
+tasks.named("compileJava") {
+    dependsOn("jooqCodegen")
+}

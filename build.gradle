@@ -1,0 +1,63 @@
+buildscript {
+    ext {
+        postgresqlVersion = '42.7.4'
+        testcontainersVersion = '1.20.2'
+        flywayVersion = '10.18.0'
+        dependencyManagementVersion = '1.1.6'
+        jooqVersion = '3.19.13'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version "3.3.4"
+    id 'io.spring.dependency-management' version "${dependencyManagementVersion}"
+    id "org.jooq.jooq-codegen-gradle" version "${jooqVersion}"
+}
+
+group = 'com.espectro93'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-jooq'
+    implementation "org.postgresql:postgresql:${postgresqlVersion}"
+    jooqCodegen "org.postgresql:postgresql:${postgresqlVersion}"
+    implementation "org.flywaydb:flyway-database-postgresql:${flywayVersion}"
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
+
+    implementation platform("org.testcontainers:testcontainers-bom:${testcontainersVersion}")
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.instancio:instancio-junit:5.0.2'
+    testImplementation 'org.testcontainers:junit-jupiter'
+
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+apply from: 'jooq.gradle'
